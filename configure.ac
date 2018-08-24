@@ -63,6 +63,8 @@ AC_LANG_POP(C)
 
 AC_SEARCH_LIBS([dlopen], [dl])
 
+PKG_CHECK_MODULES([OATH], [liboath])
+
 AC_ARG_ENABLE([qrencode], [Enable displaying QRCodes via libqrencode],
 	[], [enable_qrencode=auto])
 if test "${enable_qrencode}" != "no"; then

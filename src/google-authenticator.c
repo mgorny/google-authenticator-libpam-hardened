@@ -36,9 +36,9 @@
 # include <qrencode.h>
 #endif
 
+#include <oath.h>
+
 #include "base32.h"
-#include "hmac.h"
-#include "sha1.h"
 
 #define SECRET                    "/.google_authenticator"
 #define SECRET_BITS               128         // Must be divisible by eight
@@ -52,11 +52,6 @@
 static enum { QR_UNSET=0, QR_NONE, QR_ANSI, QR_UTF8 } qr_mode = QR_UNSET;
 
 static int generateCode(const char *key, unsigned long tm) {
-  uint8_t challenge[8];
-  for (int i = 8; i--; tm >>= 8) {
-    challenge[i] = tm;
-  }
-
   // Estimated number of bytes needed to represent the decoded secret. Because
   // of white-space and separators, this is an upper bound of the real number,
   // which we later get as a return-value from base32_decode()
@@ -75,26 +70,15 @@ static int generateCode(const char *key, unsigned long tm) {
     return -1;
   }
 
-  // Compute the HMAC_SHA1 of the secret and the challenge.
-  uint8_t hash[SHA1_DIGEST_LENGTH];
-  hmac_sha1(secret, secretLen, challenge, 8, hash, SHA1_DIGEST_LENGTH);
+  char buf[7];
+  int ret;
 
-  // Pick the offset where to sample our hash value for the actual verification
-  // code.
-  const int offset = hash[SHA1_DIGEST_LENGTH - 1] & 0xF;
-
-  // Compute the truncated hash in a byte-order independent loop.
-  unsigned int truncatedHash = 0;
-  for (int i = 0; i < 4; ++i) {
-    truncatedHash <<= 8;
-    truncatedHash  |= hash[offset + i];
+  ret = oath_hotp_generate(secret, secretLen, tm, 6, 0, 0, buf);
+  if (ret != OATH_OK) {
+    return -1;
   }
 
-  // Truncate to a smaller number of digits.
-  truncatedHash &= 0x7FFFFFFF;
-  truncatedHash %= VERIFICATION_CODE_MODULUS;
-
-  return truncatedHash;
+  return atoi(buf);
 }
 
 // return the user name in heap-allocated buffer.

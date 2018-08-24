@@ -28,8 +28,6 @@ MODULES_LDFLAGS = -avoid-version -module -shared -export-dynamic
 
 CORE_SRC  = src/util.h   src/util.c
 CORE_SRC += src/base32.h src/base32.c
-CORE_SRC += src/hmac.h   src/hmac.c
-CORE_SRC += src/sha1.h   src/sha1.c
 
 base32_SOURCES=\
 src/base32.c \
@@ -38,14 +36,15 @@ src/base32_prog.c
 google_authenticator_SOURCES = \
 	src/google-authenticator.c \
 	$(CORE_SRC)
-google_authenticator_CPPFLAGS = $(QRENCODE_CFLAGS)
-google_authenticator_LDADD = $(QRENCODE_LIBS)
+google_authenticator_CPPFLAGS = $(QRENCODE_CFLAGS) $(OATH_CFLAGS)
+google_authenticator_LDADD = $(QRENCODE_LIBS) $(OATH_LIBS)
 
 pam_google_authenticator_la_SOURCES = \
 	src/pam_google_authenticator.c \
 	$(CORE_SRC)
-pam_google_authenticator_la_LIBADD  = -lpam
+pam_google_authenticator_la_LIBADD  = -lpam $(OATH_LIBS)
 pam_google_authenticator_la_CFLAGS  = $(AM_CFLAGS)
+pam_google_authenticator_la_CPPFLAGS = $(OATH_CFLAGS)
 pam_google_authenticator_la_LDFLAGS = $(AM_LDFLAGS) $(MODULES_LDFLAGS) -export-symbols-regex "pam_sm_(setcred|open_session|authenticate)"
 
 
@@ -56,8 +55,9 @@ TESTS             = tests/pam_google_authenticator_unittest tests/base32_test.sh
 libpam_google_authenticator_testing_la_SOURCES = \
 	src/pam_google_authenticator.c \
 	$(CORE_SRC)
-libpam_google_authenticator_testing_la_LIBADD  = -lpam
+libpam_google_authenticator_testing_la_LIBADD  = -lpam $(OATH_LIBS)
 libpam_google_authenticator_testing_la_CFLAGS  = $(AM_CFLAGS) -DTESTING=1
+libpam_google_authenticator_testing_la_CPPFLAGS = $(OATH_CFLAGS)
 libpam_google_authenticator_testing_la_LDFLAGS = $(AM_LDFLAGS) $(MODULES_LDFLAGS) -rpath $(abs_top_builddir)
 
 tests_pam_google_authenticator_unittest_SOURCES = \
@@ -73,8 +73,9 @@ examples_demo_SOURCES = \
 	src/pam_google_authenticator.c \
 	$(CORE_SRC) \
 	examples/demo.c
-examples_demo_LDADD  = -lpam
+examples_demo_LDADD  = -lpam $(OATH_LIBS)
 examples_demo_CFLAGS = $(AM_CFLAGS) -DDEMO=1
+examples_demo_CPPFLAGS = $(OATH_CFLAGS)
 
 
 super-clean: maintainer-clean

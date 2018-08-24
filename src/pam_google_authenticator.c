@@ -48,9 +48,9 @@
 #include <security/pam_appl.h>
 #include <security/pam_modules.h>
 
+#include <oath.h>
+
 #include "base32.h"
-#include "hmac.h"
-#include "sha1.h"
 #include "util.h"
 
 #define MODULE_NAME   "pam_google_authenticator"
@@ -1265,23 +1265,14 @@ int compute_code(const uint8_t *secret, int secretLen, unsigned long value)
 static
 #endif
 int compute_code(const uint8_t *secret, int secretLen, unsigned long value) {
-  uint8_t val[8];
-  for (int i = 8; i--; value >>= 8) {
-    val[i] = value;
-  }
-  uint8_t hash[SHA1_DIGEST_LENGTH];
-  hmac_sha1(secret, secretLen, val, 8, hash, SHA1_DIGEST_LENGTH);
-  explicit_bzero(val, sizeof(val));
-  const int offset = hash[SHA1_DIGEST_LENGTH - 1] & 0xF;
-  unsigned int truncatedHash = 0;
-  for (int i = 0; i < 4; ++i) {
-    truncatedHash <<= 8;
-    truncatedHash  |= hash[offset + i];
-  }
-  explicit_bzero(hash, sizeof(hash));
-  truncatedHash &= 0x7FFFFFFF;
-  truncatedHash %= 1000000;
-  return truncatedHash;
+  char buf[7];
+  int ret;
+
+  ret = oath_hotp_generate(secret, secretLen, value, 6, 0, 0, buf);
+  if (ret != OATH_OK)
+    return -1;
+
+  return atoi(buf);
 }
 
 /* If a user repeated attempts to log in with the same time skew, remember
@@ -1458,7 +1449,11 @@ static int check_timebased_code(pam_handle_t *pamh, const char*secret_filename,
     return -1;
   }
   for (int i = -((window-1)/2); i <= window/2; ++i) {
-    const unsigned int hash = compute_code(secret, secretLen, tm + skew + i);
+    const int hash = compute_code(secret, secretLen, tm + skew + i);
+    if (hash == -1) {
+      log_message(LOG_ERR, pamh, "OTP generation failed");
+      return -1;
+    }
     if (hash == (unsigned int)code) {
       return invalidate_timebased_code(tm + skew + i, pamh, secret_filename,
                                        updated, buf);
@@ -1471,13 +1466,21 @@ static int check_timebased_code(pam_handle_t *pamh, const char*secret_filename,
     // use.
     skew = 1000000;
     for (int i = 0; i < 25*60; ++i) {
-      unsigned int hash = compute_code(secret, secretLen, tm - i);
+      int hash = compute_code(secret, secretLen, tm - i);
+      if (hash == -1) {
+        log_message(LOG_ERR, pamh, "OTP generation failed");
+        return -1;
+      }
       if (hash == (unsigned int)code && skew == 1000000) {
         // Don't short-circuit out of the loop as the obvious difference in
         // computation time could be a signal that is valuable to an attacker.
         skew = -i;
       }
       hash = compute_code(secret, secretLen, tm + i);
+      if (hash == -1) {
+        log_message(LOG_ERR, pamh, "OTP generation failed");
+        return -1;
+      }
       if (hash == (unsigned int)code && skew == 1000000) {
         skew = i;
       }
@@ -1522,7 +1525,11 @@ static int check_counterbased_code(pam_handle_t *pamh,
     return -1;
   }
   for (int i = 0; i < window; ++i) {
-    const unsigned int hash = compute_code(secret, secretLen, hotp_counter + i);
+    const int hash = compute_code(secret, secretLen, hotp_counter + i);
+    if (hash == -1) {
+      log_message(LOG_ERR, pamh, "OTP generation failed");
+      return -1;
+    }
     if (hash == (unsigned int)code) {
       char counter_str[40];
       snprintf(counter_str, sizeof counter_str, "%ld", hotp_counter + i + 1);

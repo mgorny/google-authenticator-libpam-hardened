@@ -31,7 +31,6 @@
 #include <unistd.h>
 
 #include "../src/base32.h"
-#include "../src/hmac.h"
 
 #if !defined(PAM_BAD_ITEM)
 // FreeBSD does not know about PAM_BAD_ITEM. And PAM_SYMBOL_ERR is an "enum",
@@ -160,52 +159,6 @@ int main(int argc, char *argv[]) {
   uint8_t dec[sizeof(dat)];
   assert(base32_decode(enc, dec, sizeof(dec)) == sizeof(dec));
   assert(!memcmp(dat, dec, sizeof(dat)));
-
-  // Testing HMAC_SHA1
-  puts("Testing HMAC_SHA1");
-  uint8_t hmac[20];
-  hmac_sha1((uint8_t *)"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C"
-                       "\x0D\x0E\x0F\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19"
-                       "\x1A\x1B\x1C\x1D\x1E\x1F !\"#$%&'()*+,-./0123456789:"
-                       ";<=>?", 64,
-            (uint8_t *)"Sample #1", 9,
-            hmac, sizeof(hmac));
-  assert(!memcmp(hmac,
-                 (uint8_t []) { 0x4F, 0x4C, 0xA3, 0xD5, 0xD6, 0x8B, 0xA7, 0xCC,
-                                0x0A, 0x12, 0x08, 0xC9, 0xC6, 0x1E, 0x9C, 0x5D,
-                                0xA0, 0x40, 0x3C, 0x0A },
-                 sizeof(hmac)));
-  hmac_sha1((uint8_t *)"0123456789:;<=>?@ABC", 20,
-            (uint8_t *)"Sample #2", 9,
-            hmac, sizeof(hmac));
-  assert(!memcmp(hmac,
-                 (uint8_t []) { 0x09, 0x22, 0xD3, 0x40, 0x5F, 0xAA, 0x3D, 0x19,
-                                0x4F, 0x82, 0xA4, 0x58, 0x30, 0x73, 0x7D, 0x5C,
-                                0xC6, 0xC7, 0x5D, 0x24 },
-                 sizeof(hmac)));
-  hmac_sha1((uint8_t *)"PQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
-                       "\x7F\x80\x81\x82\x83\x84\x85\x86\x87\x88\x89\x8A"
-                       "\x8B\x8C\x8D\x8E\x8F\x90\x91\x92\x93\x94\x95\x96"
-                       "\x97\x98\x99\x9A\x9B\x9C\x9D\x9E\x9F\xA0\xA1\xA2"
-                       "\xA3\xA4\xA5\xA6\xA7\xA8\xA9\xAA\xAB\xAC\xAD\xAE"
-                       "\xAF\xB0\xB1\xB2\xB3", 100,
-            (uint8_t *)"Sample #3", 9,
-            hmac, sizeof(hmac));
-  assert(!memcmp(hmac,
-                 (uint8_t []) { 0xBC, 0xF4, 0x1E, 0xAB, 0x8B, 0xB2, 0xD8, 0x02,
-                                0xF3, 0xD0, 0x5C, 0xAF, 0x7C, 0xB0, 0x92, 0xEC,
-                                0xF8, 0xD1, 0xA3, 0xAA },
-                 sizeof(hmac)));
-  hmac_sha1((uint8_t *)"pqrstuvwxyz{|}~\x7F\x80\x81\x82\x83\x84\x85\x86\x87"
-                       "\x88\x89\x8A\x8B\x8C\x8D\x8E\x8F\x90\x91\x92\x93\x94"
-                       "\x95\x96\x97\x98\x99\x9A\x9B\x9C\x9D\x9E\x9F\xA0", 49,
-            (uint8_t *)"Sample #4", 9,
-            hmac, sizeof(hmac));
-  assert(!memcmp(hmac,
-                 (uint8_t []) { 0x9E, 0xA8, 0x86, 0xEF, 0xE2, 0x68, 0xDB, 0xEC,
-                                0xCE, 0x42, 0x0C, 0x75, 0x24, 0xDF, 0x32, 0xE0,
-                                0x75, 0x1A, 0x2A, 0x26 },
-                 sizeof(hmac)));
 
   // Load the PAM module
   puts("Loading PAM module");
