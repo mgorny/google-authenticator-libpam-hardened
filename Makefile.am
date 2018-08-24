@@ -1,6 +1,18 @@
 AUTOMAKE_OPTIONS = foreign subdir-objects
 ACLOCAL_AMFLAGS = -I build
 
+EXTRA_DIST = \
+	bootstrap.sh \
+	contrib/build-rpm.sh \
+	contrib/README.rpm.md \
+	contrib/rpm.spec \
+	LICENSE \
+	man/google-authenticator.1.md \
+	man/pam_google_authenticator.8.md \
+	tests/base32_test.sh \
+	utc-time/app.yaml \
+	utc-time/utc-time.py
+
 pamdir = $(libdir)/security
 
 bin_PROGRAMS      = google-authenticator
