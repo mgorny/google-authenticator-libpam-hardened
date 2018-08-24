@@ -153,4 +153,4 @@ Those settings are only relevant for time-based one-time-password (TOTP):
 # SEE ALSO
 
 The Google Authenticator source code and all documentation may be downloaded
-from <https://github.com/google/google-authenticator-libpam>.
+from <https://github.com/mgorny/google-authenticator-libpam-hardened>.

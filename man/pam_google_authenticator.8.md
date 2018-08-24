@@ -159,4 +159,4 @@ verify passwords) and `pam_google_authenticator.so` should be set as
 **google-authenticator**(1).
 
 The Google Authenticator source code and all documentation may be downloaded
-from <https://github.com/google/google-authenticator-libpam>.
+from <https://github.com/mgorny/google-authenticator-libpam-hardened>.

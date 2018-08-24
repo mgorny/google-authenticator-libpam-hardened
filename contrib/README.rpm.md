@@ -37,7 +37,7 @@ google-authenticator-1.01-8.el6.x86_64.rpm
 ### Process
 
 ```shell
-git clone https://github.com/google/google-authenticator.git
+git clone https://github.com/mgorny/google-authenticator-libpam-hardened.git
 cd google-authenticator/libpam
 ./bootstrap.sh
 ./configure

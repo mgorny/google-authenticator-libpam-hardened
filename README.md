@@ -1,8 +1,6 @@
-# Google Authenticator PAM module
+# Google Authenticator PAM module (hardened by Michał Górny)
 
 Example PAM module demonstrating two-factor authentication.
-
-[![Build Status](https://travis-ci.org/google/google-authenticator-libpam.svg?branch=master)](https://travis-ci.org/google/google-authenticator-libpam)
 
 ## Build & install
 ```shell
