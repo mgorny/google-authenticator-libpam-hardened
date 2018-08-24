@@ -38,6 +38,8 @@ src/base32_prog.c
 google_authenticator_SOURCES = \
 	src/google-authenticator.c \
 	$(CORE_SRC)
+google_authenticator_CPPFLAGS = $(QRENCODE_CFLAGS)
+google_authenticator_LDADD = $(QRENCODE_LIBS)
 
 pam_google_authenticator_la_SOURCES = \
 	src/pam_google_authenticator.c \

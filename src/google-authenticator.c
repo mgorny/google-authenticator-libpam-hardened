@@ -32,6 +32,10 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#ifdef HAVE_QRENCODE
+# include <qrencode.h>
+#endif
+
 #include "base32.h"
 #include "hmac.h"
 #include "sha1.h"
@@ -193,36 +197,7 @@ static const char *getURL(const char *secret, const char *label,
 
 // Display QR code visually. If not possible, return 0.
 static int displayQRCode(const char* url) {
-  void *qrencode = dlopen("libqrencode.so.2", RTLD_NOW | RTLD_LOCAL);
-  if (!qrencode) {
-    qrencode = dlopen("libqrencode.so.3", RTLD_NOW | RTLD_LOCAL);
-  }
-  if (!qrencode) {
-    qrencode = dlopen("libqrencode.so.4", RTLD_NOW | RTLD_LOCAL);
-  }
-  if (!qrencode) {
-    qrencode = dlopen("libqrencode.3.dylib", RTLD_NOW | RTLD_LOCAL);
-  }
-  if (!qrencode) {
-    qrencode = dlopen("libqrencode.4.dylib", RTLD_NOW | RTLD_LOCAL);
-  }
-  if (!qrencode) {
-    return 0;
-  }
-  typedef struct {
-    int version;
-    int width;
-    unsigned char *data;
-  } QRcode;
-  QRcode *(*QRcode_encodeString8bit)(const char *, int, int) =
-      (QRcode *(*)(const char *, int, int))
-      dlsym(qrencode, "QRcode_encodeString8bit");
-  void (*QRcode_free)(QRcode *qrcode) =
-      (void (*)(QRcode *))dlsym(qrencode, "QRcode_free");
-  if (!QRcode_encodeString8bit || !QRcode_free) {
-    dlclose(qrencode);
-    return 0;
-  }
+#ifdef HAVE_QRENCODE
   QRcode *qrcode = QRcode_encodeString8bit(url, 0, 1);
   const char *ptr = (char *)qrcode->data;
   // Output QRCode using ANSI colors. Instead of black on white, we
@@ -305,8 +280,10 @@ static int displayQRCode(const char* url) {
     puts(ANSI_RESET);
   }
   QRcode_free(qrcode);
-  dlclose(qrencode);
   return 1;
+#else
+  return 0;
+#endif
 }
 
 // Display to the user what they need to provision their app.

@@ -63,6 +63,20 @@ AC_LANG_POP(C)
 
 AC_SEARCH_LIBS([dlopen], [dl])
 
+AC_ARG_ENABLE([qrencode], [Enable displaying QRCodes via libqrencode],
+	[], [enable_qrencode=auto])
+if test "${enable_qrencode}" != "no"; then
+	PKG_CHECK_MODULES([QRENCODE], [libqrencode], [
+		AC_DEFINE([HAVE_QRENCODE], [1], [Define to 1 if you have libqrencode])
+	], [
+		if test "${enable_qrencode}" = "yes"; then
+			AC_MSG_ERROR([libqrencode not found (requested via --enable-qrencode)])
+		else
+			AC_MSG_WARN([libqrencode not found, QRCodes will not be printed])
+		fi
+	])
+fi
+
 AC_CONFIG_HEADER(config.h)
 AC_CONFIG_FILES([Makefile contrib/rpm.spec])
 AC_OUTPUT
