@@ -42,7 +42,6 @@
 
 #define SECRET                    "/.google_authenticator"
 #define SECRET_BITS               128         // Must be divisible by eight
-#define VERIFICATION_CODE_MODULUS (1000*1000) // Six digits
 #define SCRATCHCODES              5           // Default number of initial scratchcodes
 #define MAX_SCRATCHCODES          10          // Max number of initial scratchcodes
 #define SCRATCHCODE_LENGTH        8           // Eight digits per scratchcode
