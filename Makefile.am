@@ -42,6 +42,7 @@ TESTS             = tests/pam_google_authenticator_unittest tests/base32_test.sh
 libpam_google_authenticator_testing_la_SOURCES = \
 	src/pam_google_authenticator.c \
 	$(CORE_SRC)
+libpam_google_authenticator_testing_la_LIBADD  = -lpam
 libpam_google_authenticator_testing_la_CFLAGS  = $(AM_CFLAGS) -DTESTING=1
 libpam_google_authenticator_testing_la_LDFLAGS = $(AM_LDFLAGS) $(MODULES_LDFLAGS) -rpath $(abs_top_builddir)
 
