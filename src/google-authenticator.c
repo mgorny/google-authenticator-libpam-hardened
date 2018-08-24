@@ -161,7 +161,8 @@ static const char *urlEncode(const char *s) {
 }
 
 static const char *getURL(const char *secret, const char *label,
-                          const int use_totp, const char *issuer) {
+                          const int use_totp, const char *issuer,
+                          const int period) {
   const char *encodedLabel = urlEncode(label);
   char *url;
   const char totp = use_totp ? 't' : 'h';
@@ -179,6 +180,17 @@ static const char *getURL(const char *secret, const char *label,
       _exit(1);
     }
     free((void *)encodedIssuer);
+    free(url);
+    url = newUrl;
+  }
+
+  if (period) {
+    // Append to URL &period=<period>
+    char *newUrl;
+    if (asprintf(&newUrl, "%s&period=%d", url, period) < 0) {
+      fprintf(stderr, "String allocation failed, probably running out of memory.\n");
+      _exit(1);
+    }
     free(url);
     url = newUrl;
   }
@@ -288,11 +300,12 @@ static int displayQRCode(const char* url) {
 
 // Display to the user what they need to provision their app.
 static void displayEnrollInfo(const char *secret, const char *label,
-                              const int use_totp, const char *issuer) {
+                              const int use_totp, const char *issuer,
+                              const int period) {
   if (qr_mode == QR_NONE) {
     return;
   }
-  const char *url = getURL(secret, label, use_totp, issuer);
+  const char *url = getURL(secret, label, use_totp, issuer, period);
 
   // Only newer systems have support for libqrencode. So instead of requiring
   // it at build-time we look for it at run-time. If it cannot be found, the
@@ -704,7 +717,7 @@ int main(int argc, char *argv[]) {
     use_totp = mode == TOTP_MODE;
   }
   if (!quiet) {
-    displayEnrollInfo(secret, label, use_totp, issuer);
+    displayEnrollInfo(secret, label, use_totp, issuer, step_size);
     printf("Your new secret key is: %s\n", secret);
     printf("Your verification code is %06d\n", generateCode(secret, 0));
     printf("Your emergency scratch codes are:\n");
