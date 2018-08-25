@@ -165,6 +165,14 @@ Unfortunately, many terminal emulators do not display these Unicode
 characters properly.
 .RE
 .TP
+.B \-g, \-\-digits=\f[I]6|7|8\f[]
+Set number of digits to use for authentication codes.
+.RS
+.PP
+Supported values are 6, 7 and 8. The default is 6. Not all clients
+support different digit numbers.
+.RE
+.TP
 .B \-r, \-\-rate\-limit=\f[I]N\f[], \-R, \-\-rate\-time=\f[I]M\f[], \-u, \-\-no\-rate\-limit
 Disable rate\-limiting, or limit logins to N per every M seconds.
 .RS

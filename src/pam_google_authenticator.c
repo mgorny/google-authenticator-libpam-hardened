@@ -848,6 +848,33 @@ static int step_size(pam_handle_t *pamh, const char *secret_filename,
   return step;
 }
 
+static int digits(pam_handle_t *pamh, const char *secret_filename,
+                  const char *buf) {
+  const char *value = get_cfg_value(pamh, "DIGITS", buf);
+  if (!value) {
+    // Default digit number is 6.
+    return 6;
+  } else if (value == &oom) {
+    // Out of memory. This is a fatal error.
+    return 0;
+  }
+
+  char *endptr;
+  errno = 0;
+  const int digit_num = (int)strtoul(value, &endptr, 10);
+  if (errno || !*value || value == endptr ||
+      (*endptr && *endptr != ' ' && *endptr != '\t' &&
+       *endptr != '\n' && *endptr != '\r') ||
+      digit_num < 6 || digit_num > 8) {
+    free((void *)value);
+    log_message(LOG_ERR, pamh, "Invalid DIGITS option in \"%s\"",
+                secret_filename);
+    return 0;
+  }
+  free((void *)value);
+  return digit_num;
+}
+
 static int get_timestamp(pam_handle_t *pamh, const char *secret_filename,
                          const char **buf) {
   const int step = step_size(pamh, secret_filename, *buf);
@@ -1259,16 +1286,18 @@ static int invalidate_timebased_code(int tm, pam_handle_t *pamh,
  * expected authentication token.
  */
 #ifdef TESTING
-int compute_code(const uint8_t *secret, int secretLen, unsigned long value)
+int compute_code(const uint8_t *secret, int secretLen, unsigned long value,
+                 int digit_num)
   __attribute__((visibility("default")));
 #else
 static
 #endif
-int compute_code(const uint8_t *secret, int secretLen, unsigned long value) {
-  char buf[7];
+int compute_code(const uint8_t *secret, int secretLen, unsigned long value,
+                 int digit_num) {
+  char buf[9];
   int ret;
 
-  ret = oath_hotp_generate(secret, secretLen, value, 6, 0, 0, buf);
+  ret = oath_hotp_generate(secret, secretLen, value, digit_num, 0, 0, buf);
   if (ret != OATH_OK)
     return -1;
 
@@ -1422,8 +1451,8 @@ static int check_timebased_code(pam_handle_t *pamh, const char*secret_filename,
     return 1;
   }
 
-  if (code < 0 || code >= 1000000) {
-    // All time based verification codes are no longer than six digits.
+  if (code < 0 || code >= 100000000) {
+    // All time based verification codes are no longer than eight digits.
     return 1;
   }
 
@@ -1444,12 +1473,15 @@ static int check_timebased_code(pam_handle_t *pamh, const char*secret_filename,
   }
   free((void *)skew_str);
 
+  const int digit_num = digits(pamh, secret_filename, *buf);
+
   const int window = window_size(pamh, secret_filename, *buf);
   if (!window) {
     return -1;
   }
   for (int i = -((window-1)/2); i <= window/2; ++i) {
-    const int hash = compute_code(secret, secretLen, tm + skew + i);
+    const int hash = compute_code(secret, secretLen, tm + skew + i,
+                                  digit_num);
     if (hash == -1) {
       log_message(LOG_ERR, pamh, "OTP generation failed");
       return -1;
@@ -1466,7 +1498,7 @@ static int check_timebased_code(pam_handle_t *pamh, const char*secret_filename,
     // use.
     skew = 1000000;
     for (int i = 0; i < 25*60; ++i) {
-      int hash = compute_code(secret, secretLen, tm - i);
+      int hash = compute_code(secret, secretLen, tm - i, digit_num);
       if (hash == -1) {
         log_message(LOG_ERR, pamh, "OTP generation failed");
         return -1;
@@ -1476,7 +1508,7 @@ static int check_timebased_code(pam_handle_t *pamh, const char*secret_filename,
         // computation time could be a signal that is valuable to an attacker.
         skew = -i;
       }
-      hash = compute_code(secret, secretLen, tm + i);
+      hash = compute_code(secret, secretLen, tm + i, digit_num);
       if (hash == -1) {
         log_message(LOG_ERR, pamh, "OTP generation failed");
         return -1;
@@ -1518,6 +1550,8 @@ static int check_counterbased_code(pam_handle_t *pamh,
     return 1;
   }
 
+  const int digit_num = digits(pamh, secret_filename, *buf);
+
   // Compute [window_size] verification codes and compare them with user input.
   // Future codes are allowed in case the user computed but did not use a code.
   const int window = window_size(pamh, secret_filename, *buf);
@@ -1525,7 +1559,8 @@ static int check_counterbased_code(pam_handle_t *pamh,
     return -1;
   }
   for (int i = 0; i < window; ++i) {
-    const int hash = compute_code(secret, secretLen, hotp_counter + i);
+    const int hash = compute_code(secret, secretLen, hotp_counter + i,
+                                  digit_num);
     if (hash == -1) {
       log_message(LOG_ERR, pamh, "OTP generation failed");
       return -1;
@@ -1695,6 +1730,11 @@ static int google_authenticator(pam_handle_t *pamh,
   }
 
   const long hotp_counter = get_hotp_counter(pamh, buf);
+  int digit_num = 0;
+  if (buf)
+    digit_num = digits(pamh, secret_filename, buf);
+  if (!digit_num)
+    digit_num = 6;
 
   // Only if nullok and we do not have a code will we NOT ask for a code.
   // In all other cases (i.e "have code" and "no nullok and no code") we DO ask for a code.
@@ -1763,7 +1803,7 @@ static int google_authenticator(pam_handle_t *pamh,
       // We are often dealing with a combined password and verification
       // code. Separate them now.
       const int pw_len = strlen(pw);
-      const int expected_len = mode & 1 ? 8 : 6;
+      const int expected_len = mode & 1 ? 8 : digit_num;
       char ch;
 
       // Full OpenSSH "bad password" is "\b\n\r\177INCORRECT", capped
@@ -1776,10 +1816,10 @@ static int google_authenticator(pam_handle_t *pamh,
       }
 
       if (pw_len < expected_len ||
-          // Verification are six digits starting with '0'..'9',
+          // Verification are 6-8 digits starting with '0'..'9',
           // scratch codes are eight digits starting with '1'..'9'
           (ch = pw[pw_len - expected_len]) > '9' ||
-          ch < (expected_len == 8 ? '1' : '0')) {
+          ch < (mode & 1 ? '1' : '0')) {
       invalid:
         explicit_bzero(pw, pw_len);
         free(pw);

@@ -180,8 +180,8 @@ int main(int argc, char *argv[]) {
   void (*set_time)(time_t t) =
       (void (*)(time_t))dlsym(pam_module, "set_time");
   assert(set_time);
-  int (*compute_code)(uint8_t *, int, unsigned long) =
-      (int (*)(uint8_t*, int, unsigned long))dlsym(pam_module, "compute_code");
+  int (*compute_code)(uint8_t *, int, unsigned long, int) =
+      (int (*)(uint8_t*, int, unsigned long, int))dlsym(pam_module, "compute_code");
   assert(compute_code);
 
   for (int otp_mode = 0; otp_mode < 8; ++otp_mode) {
@@ -337,6 +337,35 @@ int main(int argc, char *argv[]) {
     assert(pam_sm_authenticate(NULL, 0, targc, targv) == PAM_SUCCESS);
     verify_prompts_shown(expected_good_prompts_shown);
 
+    // Test the DIGITS option
+    puts("Testing DIGITS option");
+    response = "26050548";
+    /* when password is combined with OTP code, we can't tell
+     * if the extraneous digits are OTP or part of password */
+    if (otp_mode != 2 && otp_mode != 4 && otp_mode != 5) {
+      assert(pam_sm_authenticate(NULL, 0, targc, targv) == PAM_AUTH_ERR);
+      verify_prompts_shown(expected_bad_prompts_shown);
+    }
+
+    assert(!chmod(fn, 0600));
+    assert((fd = open(fn, O_APPEND | O_WRONLY)) >= 0);
+    assert(write(fd, "\n\" DIGITS 8\n", 12) == 12);
+    close(fd);
+
+    assert(pam_sm_authenticate(NULL, 0, targc, targv) == PAM_SUCCESS);
+    verify_prompts_shown(expected_good_prompts_shown);
+
+    response = "050548";
+    assert(pam_sm_authenticate(NULL, 0, targc, targv) == PAM_AUTH_ERR);
+    verify_prompts_shown(expected_bad_prompts_shown);
+
+    // Reset secret file after digit number testing.
+    assert(!chmod(fn, 0600));
+    assert((fd = open(fn, O_TRUNC | O_WRONLY)) >= 0);
+    assert(write(fd, secret, sizeof(secret)-1) == sizeof(secret)-1);
+    assert(write(fd, "\n\" TOTP_AUTH", 12) == 12);
+    close(fd);
+
     // Test the STEP_SIZE option
     puts("Testing STEP_SIZE option");
     assert(!chmod(fn, 0600));
@@ -402,7 +431,7 @@ int main(int argc, char *argv[]) {
       char buf[7];
       response = buf;
       sprintf(response, "%06d", compute_code(binary_secret,
-                                             binary_secret_len, i));
+                                             binary_secret_len, i, 6));
       assert(pam_sm_authenticate(NULL, 0, targc, targv) == PAM_SUCCESS);
       verify_prompts_shown(expected_good_prompts_shown);
     }
@@ -431,7 +460,7 @@ int main(int argc, char *argv[]) {
       char buf[7];
       response = buf;
       sprintf(response, "%06d",
-              compute_code(binary_secret, binary_secret_len, *tm++));
+              compute_code(binary_secret, binary_secret_len, *tm++, 6));
       assert(pam_sm_authenticate(NULL, 0, targc, targv) == *res);
       verify_prompts_shown(
           *res != PAM_SUCCESS ? 0 : expected_good_prompts_shown);
@@ -474,7 +503,7 @@ int main(int argc, char *argv[]) {
       char buf[7];
       response = buf;
       sprintf(response, "%06d",
-              compute_code(binary_secret, binary_secret_len, 11000 + i));
+              compute_code(binary_secret, binary_secret_len, 11000 + i, 6));
       assert(pam_sm_authenticate(NULL, 0, targc, targv) ==
              (i >= 2 ? PAM_SUCCESS : PAM_AUTH_ERR));
       verify_prompts_shown(expected_good_prompts_shown);
@@ -485,7 +514,7 @@ int main(int argc, char *argv[]) {
     char buf[7];
     response = buf;
     sprintf(response, "%06d", compute_code(binary_secret,
-                                           binary_secret_len, 11010));
+                                           binary_secret_len, 11010, 6));
     targv[targc] = "noskewadj";
     assert(pam_sm_authenticate(NULL, 0, targc+1, targv) == PAM_AUTH_ERR);
     targv[targc] = NULL;

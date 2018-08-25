@@ -129,6 +129,12 @@ Those settings are only relevant for time-based one-time-password (TOTP):
     to scan. Unfortunately, many terminal emulators do not display these
     Unicode characters properly.
 
+-g, --digits=*6|7|8*
+:   Set number of digits to use for authentication codes.
+
+    Supported values are 6, 7 and 8. The default is 6. Not all clients
+    support different digit numbers.
+
 -r, --rate-limit=*N*, -R, --rate-time=*M*, -u, --no-rate-limit
 :   Disable rate-limiting, or limit logins to N per every M seconds.
 

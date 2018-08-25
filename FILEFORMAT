@@ -44,6 +44,10 @@ Currently, the following options are recognized:
     the number of seconds in each time step during which a TOTP code is valid.
     The default is that a code is valid for 30 seconds.
 
+  DIGITS n
+    the number of digits used for OTP codes. Can be 6, 7 or 8. The default
+    is 6.
+
   HOTP_COUNTER n
     the presence of this option indicates that the secret can be used to
     authenticate users with a counter-based token.  The argument "n"

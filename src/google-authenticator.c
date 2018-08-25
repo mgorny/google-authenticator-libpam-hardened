@@ -50,7 +50,7 @@
 
 static enum { QR_UNSET=0, QR_NONE, QR_ANSI, QR_UTF8 } qr_mode = QR_UNSET;
 
-static int generateCode(const char *key, unsigned long tm) {
+static int generateCode(const char *key, unsigned long tm, int digits) {
   // Estimated number of bytes needed to represent the decoded secret. Because
   // of white-space and separators, this is an upper bound of the real number,
   // which we later get as a return-value from base32_decode()
@@ -69,10 +69,13 @@ static int generateCode(const char *key, unsigned long tm) {
     return -1;
   }
 
-  char buf[7];
+  if (!digits)
+    digits = 6;
+
+  char buf[9];
   int ret;
 
-  ret = oath_hotp_generate(secret, secretLen, tm, 6, 0, 0, buf);
+  ret = oath_hotp_generate(secret, secretLen, tm, digits, 0, 0, buf);
   if (ret != OATH_OK) {
     return -1;
   }
@@ -145,7 +148,7 @@ static const char *urlEncode(const char *s) {
 
 static const char *getURL(const char *secret, const char *label,
                           const int use_totp, const char *issuer,
-                          const int period) {
+                          const int period, const int digits) {
   const char *encodedLabel = urlEncode(label);
   char *url;
   const char totp = use_totp ? 't' : 'h';
@@ -171,6 +174,17 @@ static const char *getURL(const char *secret, const char *label,
     // Append to URL &period=<period>
     char *newUrl;
     if (asprintf(&newUrl, "%s&period=%d", url, period) < 0) {
+      fprintf(stderr, "String allocation failed, probably running out of memory.\n");
+      _exit(1);
+    }
+    free(url);
+    url = newUrl;
+  }
+
+  if (digits) {
+    // Append to URL &digits=<digits>
+    char *newUrl;
+    if (asprintf(&newUrl, "%s&digits=%d", url, digits) < 0) {
       fprintf(stderr, "String allocation failed, probably running out of memory.\n");
       _exit(1);
     }
@@ -284,11 +298,12 @@ static int displayQRCode(const char* url) {
 // Display to the user what they need to provision their app.
 static void displayEnrollInfo(const char *secret, const char *label,
                               const int use_totp, const char *issuer,
-                              const int period) {
+                              const int period, const int digits) {
   if (qr_mode == QR_NONE) {
     return;
   }
-  const char *url = getURL(secret, label, use_totp, issuer, period);
+  const char *url = getURL(secret, label, use_totp, issuer, period,
+                           digits);
 
   // Only newer systems have support for libqrencode. So instead of requiring
   // it at build-time we look for it at run-time. If it cannot be found, the
@@ -372,7 +387,8 @@ static void usage(void) {
  " -S, --step-size=S              Set interval between token refreshes\n"
  " -w, --window-size=W            Set window of concurrently valid codes\n"
  " -W, --minimal-window           Disable window of concurrently valid codes\n"
- " -e, --emergency-codes=N        Number of emergency codes to generate");
+ " -e, --emergency-codes=N        Number of emergency codes to generate\n"
+ " -g, --digits={6,7,8}           Number of digits to use for auth codes");
 }
 
 int main(int argc, char *argv[]) {
@@ -381,6 +397,7 @@ int main(int argc, char *argv[]) {
   static const char totp[]      = "\" TOTP_AUTH\n";
   static const char disallow[]  = "\" DISALLOW_REUSE\n";
   static const char step[]      = "\" STEP_SIZE 30\n";
+  static const char digits[]    = "\" DIGITS 6\n";
   static const char window[]    = "\" WINDOW_SIZE 17\n";
   static const char ratelimit[] = "\" RATE_LIMIT 3 30\n";
   char secret[(SECRET_BITS + BITS_PER_BASE32_CHAR-1)/BITS_PER_BASE32_CHAR +
@@ -388,6 +405,7 @@ int main(int argc, char *argv[]) {
               sizeof(hotp) +  // hotp and totp are mutually exclusive.
               sizeof(disallow) +
               sizeof(step) +
+              sizeof(digits) +
               sizeof(window) +
               sizeof(ratelimit) + 5 + // NN MMM (total of five digits)
               SCRATCHCODE_LENGTH*(MAX_SCRATCHCODES + 1 /* newline */) +
@@ -403,9 +421,10 @@ int main(int argc, char *argv[]) {
   int step_size = 0;
   int window_size = 0;
   int emergency_codes = -1;
+  int digits_num = 0;
   int idx;
   for (;;) {
-    static const char optstring[] = "+hctdDfl:i:qQ:r:R:us:S:w:We:";
+    static const char optstring[] = "+hctdDfl:i:qQ:r:R:us:S:w:We:g:";
     static struct option options[] = {
       { "help",             0, 0, 'h' },
       { "counter-based",    0, 0, 'c' },
@@ -425,6 +444,7 @@ int main(int argc, char *argv[]) {
       { "window-size",      1, 0, 'w' },
       { "minimal-window",   0, 0, 'W' },
       { "emergency-codes",  1, 0, 'e' },
+      { "digits",           1, 0, 'g' },
       { 0,                  0, 0,  0  }
     };
     idx = -1;
@@ -641,6 +661,20 @@ int main(int argc, char *argv[]) {
         _exit(1);
       }
       emergency_codes = (int)l;
+    } else if (!idx--) {
+      // digits
+      if (digits_num) {
+        fprintf(stderr, "Duplicate -g option detected\n");
+        _exit(1);
+      }
+      char *endptr;
+      errno = 0;
+      const long l = strtol(optarg, &endptr, 10);
+      if (errno || endptr == optarg || *endptr || l < 6 || l > 8) {
+        fprintf(stderr, "-g requires an argument in the range 6..8\n");
+        _exit(1);
+      }
+      digits_num = (int)l;
     } else {
       fprintf(stderr, "Error\n");
       _exit(1);
@@ -700,9 +734,9 @@ int main(int argc, char *argv[]) {
     use_totp = mode == TOTP_MODE;
   }
   if (!quiet) {
-    displayEnrollInfo(secret, label, use_totp, issuer, step_size);
+    displayEnrollInfo(secret, label, use_totp, issuer, step_size, digits_num);
     printf("Your new secret key is: %s\n", secret);
-    printf("Your verification code is %06d\n", generateCode(secret, 0));
+    printf("Your verification code is %06d\n", generateCode(secret, 0, digits_num));
     printf("Your emergency scratch codes are:\n");
   }
   free(label);
@@ -783,6 +817,11 @@ int main(int argc, char *argv[]) {
     if (step_size) {
       char s[80];
       snprintf(s, sizeof s, "\" STEP_SIZE %d\n", step_size);
+      addOption(secret, sizeof(secret), s);
+    }
+    if (digits_num) {
+      char s[80];
+      snprintf(s, sizeof s, "\" DIGITS %d\n", digits_num);
       addOption(secret, sizeof(secret), s);
     }
     if (!window_size) {
