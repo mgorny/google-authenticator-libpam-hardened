@@ -875,15 +875,6 @@ static int digits(pam_handle_t *pamh, const char *secret_filename,
   return digit_num;
 }
 
-static int get_timestamp(pam_handle_t *pamh, const char *secret_filename,
-                         const char **buf) {
-  const int step = step_size(pamh, secret_filename, *buf);
-  if (!step) {
-    return 0;
-  }
-  return get_time()/step;
-}
-
 static long get_hotp_counter(pam_handle_t *pamh, const char *buf) {
   if (!buf) {
     return -1;
@@ -1457,19 +1448,20 @@ static int check_timebased_code(pam_handle_t *pamh, const char*secret_filename,
   }
 
   // Compute verification codes and compare them with user input
-  const int tm = get_timestamp(pamh, secret_filename, (const char **)buf);
-  if (!tm) {
+  const int step = step_size(pamh, secret_filename, *buf);
+  if (!step)
     return -1;
-  }
+  time_t tm = get_time();
+
   const char *skew_str = get_cfg_value(pamh, "TIME_SKEW", *buf);
   if (skew_str == &oom) {
     // Out of memory. This is a fatal error
     return -1;
   }
 
-  int skew = 0;
+  time_t skew = 0;
   if (skew_str) {
-    skew = (int)strtol(skew_str, NULL, 10);
+    skew = (time_t)strtol(skew_str, NULL, 10) * step;
   }
   free((void *)skew_str);
 
@@ -1480,14 +1472,15 @@ static int check_timebased_code(pam_handle_t *pamh, const char*secret_filename,
     return -1;
   }
   for (int i = -((window-1)/2); i <= window/2; ++i) {
-    const int hash = compute_code(secret, secretLen, tm + skew + i,
+    time_t tmval = (tm + skew + i*step) / step;
+    const int hash = compute_code(secret, secretLen, tmval,
                                   digit_num);
     if (hash == -1) {
       log_message(LOG_ERR, pamh, "OTP generation failed");
       return -1;
     }
     if (hash == (unsigned int)code) {
-      return invalidate_timebased_code(tm + skew + i, pamh, secret_filename,
+      return invalidate_timebased_code(tmval, pamh, secret_filename,
                                        updated, buf);
     }
   }
@@ -1498,7 +1491,7 @@ static int check_timebased_code(pam_handle_t *pamh, const char*secret_filename,
     // use.
     skew = 1000000;
     for (int i = 0; i < 25*60; ++i) {
-      int hash = compute_code(secret, secretLen, tm - i, digit_num);
+      int hash = compute_code(secret, secretLen, (tm - i*step)/step, digit_num);
       if (hash == -1) {
         log_message(LOG_ERR, pamh, "OTP generation failed");
         return -1;
@@ -1508,7 +1501,7 @@ static int check_timebased_code(pam_handle_t *pamh, const char*secret_filename,
         // computation time could be a signal that is valuable to an attacker.
         skew = -i;
       }
-      hash = compute_code(secret, secretLen, tm + i, digit_num);
+      hash = compute_code(secret, secretLen, (tm + i*step)/step, digit_num);
       if (hash == -1) {
         log_message(LOG_ERR, pamh, "OTP generation failed");
         return -1;
@@ -1521,7 +1514,7 @@ static int check_timebased_code(pam_handle_t *pamh, const char*secret_filename,
       if(params->debug) {
         log_message(LOG_INFO, pamh, "debug: time skew adjusted");
       }
-      return check_time_skew(pamh, updated, buf, skew, tm);
+      return check_time_skew(pamh, updated, buf, skew, tm/step);
     }
   }
 
