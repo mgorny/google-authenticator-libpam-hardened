@@ -367,6 +367,7 @@ int main(int argc, char *argv[]) {
     assert(write(fd, "\n\" TOTP_AUTH", 12) == 12);
     close(fd);
 
+#ifdef HAVE_OATH_TOTP_GENERATE2
     // Test the ALGORITHM SHA256 option
     puts("Testing ALGORITHM SHA256 option");
     assert(!chmod(fn, 0600));
@@ -410,6 +411,7 @@ int main(int argc, char *argv[]) {
     assert(write(fd, secret, sizeof(secret)-1) == sizeof(secret)-1);
     assert(write(fd, "\n\" TOTP_AUTH", 12) == 12);
     close(fd);
+#endif
 
     // Test the STEP_SIZE option
     puts("Testing STEP_SIZE option");

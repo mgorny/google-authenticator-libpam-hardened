@@ -887,12 +887,14 @@ static int algorithm(pam_handle_t *pamh, const char *secret_filename,
   }
 
   int ret;
-  if (!strcasecmp(value, "SHA256"))
+  if (!strcasecmp(value, "SHA1"))
+    ret = 0;
+#ifdef HAVE_OATH_TOTP_GENERATE2
+  else if (!strcasecmp(value, "SHA256"))
     ret = OATH_TOTP_HMAC_SHA256;
   else if (!strcasecmp(value, "SHA512"))
     ret = OATH_TOTP_HMAC_SHA512;
-  else if (!strcasecmp(value, "SHA1"))
-    ret = 0;
+#endif
   else {
     free((void *)value);
     log_message(LOG_ERR, pamh, "Invalid ALGORITHM option in \"%s\"",
@@ -1512,8 +1514,13 @@ static int check_timebased_code(pam_handle_t *pamh, const char*secret_filename,
 
   for (int i = -((window-1)/2); i <= window/2; ++i) {
     time_t tmval = tm + skew + i*step;
+#ifdef HAVE_OATH_TOTP_GENERATE2
     int ret = oath_totp_generate2(secret, secretLen, tmval, step, 0,
                                   digit_num, algo_flags, otp_buf);
+#else
+    int ret = oath_totp_generate(secret, secretLen, tmval, step, 0,
+                                 digit_num, otp_buf);
+#endif
     if (ret != OATH_OK) {
       log_message(LOG_ERR, pamh, "OTP generation failed: %s",
                   oath_strerror(ret));
@@ -1531,8 +1538,13 @@ static int check_timebased_code(pam_handle_t *pamh, const char*secret_filename,
     skew = 1000000;
     for (int i = 0; i < 25*60; ++i) {
       time_t tmval = tm - i*step;
+#ifdef HAVE_OATH_TOTP_GENERATE2
       int ret = oath_totp_generate2(secret, secretLen, tm - i*step, step,
                                     0, digit_num, algo_flags, otp_buf);
+#else
+      int ret = oath_totp_generate(secret, secretLen, tm - i*step, step,
+                                    0, digit_num, otp_buf);
+#endif
       if (ret != OATH_OK) {
         log_message(LOG_ERR, pamh, "OTP generation failed: %s",
                     oath_strerror(ret));
@@ -1542,8 +1554,13 @@ static int check_timebased_code(pam_handle_t *pamh, const char*secret_filename,
         // computation time could be a signal that is valuable to an attacker.
         skew = -i;
       }
+#ifdef HAVE_OATH_TOTP_GENERATE2
       ret = oath_totp_generate2(secret, secretLen, tm + i*step, step, 0,
                                 digit_num, algo_flags, otp_buf);
+#else
+      ret = oath_totp_generate(secret, secretLen, tm + i*step, step, 0,
+                               digit_num, otp_buf);
+#endif
       if (ret != OATH_OK) {
         log_message(LOG_ERR, pamh, "OTP generation failed: %s",
                     oath_strerror(ret));

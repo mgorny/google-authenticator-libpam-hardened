@@ -64,6 +64,10 @@ AC_LANG_POP(C)
 AC_SEARCH_LIBS([dlopen], [dl])
 
 PKG_CHECK_MODULES([OATH], [liboath])
+save_LIBS=${LIBS}
+LIBS="${LIBS} ${OATH_LIBS}"
+AC_CHECK_FUNCS([oath_totp_generate2])
+LIBS=${save_LIBS}
 
 AC_ARG_ENABLE([qrencode], [Enable displaying QRCodes via libqrencode],
 	[], [enable_qrencode=auto])

@@ -164,8 +164,10 @@ static const char *getURL(const char *secret, const char *label,
     // Append to URL &algorithm=<algo>
     char *newUrl;
     if (asprintf(&newUrl, "%s&algorithm=%s", url,
+#ifdef HAVE_OATH_TOTP_GENERATE2
                  algorithm == OATH_TOTP_HMAC_SHA256 ? "SHA256" :
                  algorithm == OATH_TOTP_HMAC_SHA512 ? "SHA512" :
+#endif
                  "SHA1") < 0) {
       fprintf(stderr, "String allocation failed, probably running out of memory.\n");
       _exit(1);
@@ -372,7 +374,12 @@ static void usage(void) {
  " -W, --minimal-window           Disable window of concurrently valid codes\n"
  " -e, --emergency-codes=N        Number of emergency codes to generate\n"
  " -g, --digits={6,7,8}           Number of digits to use for auth codes\n"
- " -a, --algorithm=sha{1,256,512} Algorithm to use for HMAC");
+#ifdef HAVE_OATH_TOTP_GENERATE2
+ " -a, --algorithm=sha{1,256,512} Algorithm to use for TOTP HMAC"
+#else
+ " -a, --algorithm=sha1           Algorithm to use for TOTP HMAC"
+#endif
+ );
 }
 
 int main(int argc, char *argv[]) {
@@ -672,10 +679,12 @@ int main(int argc, char *argv[]) {
       }
       if (!strcasecmp(optarg, "sha1")) {
         totp_algo = 0;
+#ifdef HAVE_OATH_TOTP_GENERATE2
       } else if (!strcasecmp(optarg, "sha256")) {
         totp_algo = OATH_TOTP_HMAC_SHA256;
       } else if (!strcasecmp(optarg, "sha512")) {
         totp_algo = OATH_TOTP_HMAC_SHA512;
+#endif
       } else {
         fprintf(stderr, "Invalid algorithm \"%s\"\n", optarg);
         _exit(1);
@@ -751,10 +760,17 @@ int main(int argc, char *argv[]) {
 
       if (use_totp) {
         time_t tv = now + (i - 1) * (step_size ? step_size : 30);
+#ifdef HAVE_OATH_TOTP_GENERATE2
         ret = oath_totp_generate2(buf, SECRET_BITS/8, tv, step_size, 0,
                                   digits_num ? digits_num : 6,
                                   totp_algo != -1 ? totp_algo : 0,
                                   otp_buf[i]);
+#else
+        assert(totp_algo <= 0);
+        ret = oath_totp_generate(buf, SECRET_BITS/8, tv, step_size, 0,
+                                 digits_num ? digits_num : 6,
+                                 otp_buf[i]);
+#endif
       } else {
         ret = oath_hotp_generate(buf, SECRET_BITS/8, i-1,
                                  digits_num ? digits_num : 6,
@@ -863,8 +879,10 @@ int main(int argc, char *argv[]) {
     if (totp_algo != -1) {
       char s[80];
       snprintf(s, sizeof s, "\" ALGORITHM %s\n",
+#ifdef HAVE_OATH_TOTP_GENERATE2
                totp_algo == OATH_TOTP_HMAC_SHA256 ? "sha256" :
                totp_algo == OATH_TOTP_HMAC_SHA512 ? "sha512" :
+#endif
                "sha1");
       addOption(secret, sizeof(secret), s);
     }
