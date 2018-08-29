@@ -703,10 +703,21 @@ int main(int argc, char *argv[]) {
   if (!quiet) {
     char otp_buf[5][9];
     int64_t i;
+    time_t now = time(NULL);
     for (i = 0; i < 5; ++i) {
-      int ret = oath_hotp_generate(buf, SECRET_BITS/8, i-1,
-                                   digits_num ? digits_num : 6,
-                                   0, 0, otp_buf[i]);
+      int ret;
+
+      if (use_totp) {
+        time_t tv = now + (i - 1) * (step_size ? step_size : 30);
+        ret = oath_totp_generate(buf, SECRET_BITS/8, tv, step_size, 0,
+                                 digits_num ? digits_num : 6,
+                                 otp_buf[i]);
+      } else {
+        ret = oath_hotp_generate(buf, SECRET_BITS/8, i-1,
+                                 digits_num ? digits_num : 6,
+                                 0, 0, otp_buf[i]);
+      }
+
       if (ret != OATH_OK) {
         fprintf(stderr, "Error generating verification code: %s\n",
                 oath_strerror(ret));
