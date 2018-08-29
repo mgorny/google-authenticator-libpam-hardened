@@ -135,6 +135,11 @@ Those settings are only relevant for time-based one-time-password (TOTP):
     Supported values are 6, 7 and 8. The default is 6. Not all clients
     support different digit numbers.
 
+-a, --algorithm=*sha1|sha256|sha512*
+:   Set the algorithm to use for HMAC.
+
+    Supported values are sha1, sha256 and sha512. The default is sha1.
+
 -r, --rate-limit=*N*, -R, --rate-time=*M*, -u, --no-rate-limit
 :   Disable rate-limiting, or limit logins to N per every M seconds.
 

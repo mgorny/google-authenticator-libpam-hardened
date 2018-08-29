@@ -2,6 +2,7 @@
 //
 // Copyright 2010 Google Inc.
 // Author: Markus Gutschke
+// Copyright 2018 Michał Górny
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -875,6 +876,33 @@ static int digits(pam_handle_t *pamh, const char *secret_filename,
   return digit_num;
 }
 
+static int algorithm(pam_handle_t *pamh, const char *secret_filename,
+                     const char *buf) {
+  const char *value = get_cfg_value(pamh, "ALGORITHM", buf);
+  if (!value) {
+    return 0;
+  } else if (value == &oom) {
+    // Out of memory. This is a fatal error.
+    return -1;
+  }
+
+  int ret;
+  if (!strcasecmp(value, "SHA256"))
+    ret = OATH_TOTP_HMAC_SHA256;
+  else if (!strcasecmp(value, "SHA512"))
+    ret = OATH_TOTP_HMAC_SHA512;
+  else if (!strcasecmp(value, "SHA1"))
+    ret = 0;
+  else {
+    free((void *)value);
+    log_message(LOG_ERR, pamh, "Invalid ALGORITHM option in \"%s\"",
+                secret_filename);
+    return -1;
+  }
+  free((void *)value);
+  return ret;
+}
+
 static long get_hotp_counter(pam_handle_t *pamh, const char *buf) {
   if (!buf) {
     return -1;
@@ -1470,6 +1498,11 @@ static int check_timebased_code(pam_handle_t *pamh, const char*secret_filename,
     return -1;
   }
 
+  const int algo_flags = algorithm(pamh, secret_filename, *buf);
+  if (algo_flags == -1) {
+    return -1;
+  }
+
   const int window = window_size(pamh, secret_filename, *buf);
   if (!window) {
     return -1;
@@ -1479,8 +1512,8 @@ static int check_timebased_code(pam_handle_t *pamh, const char*secret_filename,
 
   for (int i = -((window-1)/2); i <= window/2; ++i) {
     time_t tmval = tm + skew + i*step;
-    int ret = oath_totp_generate(secret, secretLen, tmval, step, 0,
-                                 digit_num, otp_buf);
+    int ret = oath_totp_generate2(secret, secretLen, tmval, step, 0,
+                                  digit_num, algo_flags, otp_buf);
     if (ret != OATH_OK) {
       log_message(LOG_ERR, pamh, "OTP generation failed: %s",
                   oath_strerror(ret));
@@ -1498,8 +1531,8 @@ static int check_timebased_code(pam_handle_t *pamh, const char*secret_filename,
     skew = 1000000;
     for (int i = 0; i < 25*60; ++i) {
       time_t tmval = tm - i*step;
-      int ret = oath_totp_generate(secret, secretLen, tm - i*step, step,
-                                   0, digit_num, otp_buf);
+      int ret = oath_totp_generate2(secret, secretLen, tm - i*step, step,
+                                    0, digit_num, algo_flags, otp_buf);
       if (ret != OATH_OK) {
         log_message(LOG_ERR, pamh, "OTP generation failed: %s",
                     oath_strerror(ret));
@@ -1509,8 +1542,8 @@ static int check_timebased_code(pam_handle_t *pamh, const char*secret_filename,
         // computation time could be a signal that is valuable to an attacker.
         skew = -i;
       }
-      ret = oath_totp_generate(secret, secretLen, tm + i*step, step, 0,
-                               digit_num, otp_buf);
+      ret = oath_totp_generate2(secret, secretLen, tm + i*step, step, 0,
+                                digit_num, algo_flags, otp_buf);
       if (ret != OATH_OK) {
         log_message(LOG_ERR, pamh, "OTP generation failed: %s",
                     oath_strerror(ret));

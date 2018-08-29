@@ -3,6 +3,7 @@
 //
 // Copyright 2010 Google Inc.
 // Author: Markus Gutschke
+// Copyright 2018 Michał Górny
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -360,6 +361,50 @@ int main(int argc, char *argv[]) {
     verify_prompts_shown(expected_bad_prompts_shown);
 
     // Reset secret file after digit number testing.
+    assert(!chmod(fn, 0600));
+    assert((fd = open(fn, O_TRUNC | O_WRONLY)) >= 0);
+    assert(write(fd, secret, sizeof(secret)-1) == sizeof(secret)-1);
+    assert(write(fd, "\n\" TOTP_AUTH", 12) == 12);
+    close(fd);
+
+    // Test the ALGORITHM SHA256 option
+    puts("Testing ALGORITHM SHA256 option");
+    assert(!chmod(fn, 0600));
+    assert((fd = open(fn, O_APPEND | O_WRONLY)) >= 0);
+    assert(write(fd, "\n\" ALGORITHM SHA256\n", 20) == 20);
+    close(fd);
+
+    response = "596509";
+    assert(pam_sm_authenticate(NULL, 0, targc, targv) == PAM_SUCCESS);
+    verify_prompts_shown(expected_good_prompts_shown);
+
+    response = "050548";
+    assert(pam_sm_authenticate(NULL, 0, targc, targv) == PAM_AUTH_ERR);
+    verify_prompts_shown(expected_bad_prompts_shown);
+
+    // Reset secret file after algorithm testing.
+    assert(!chmod(fn, 0600));
+    assert((fd = open(fn, O_TRUNC | O_WRONLY)) >= 0);
+    assert(write(fd, secret, sizeof(secret)-1) == sizeof(secret)-1);
+    assert(write(fd, "\n\" TOTP_AUTH", 12) == 12);
+    close(fd);
+
+    // Test the ALGORITHM SHA512 option
+    puts("Testing ALGORITHM SHA512 option");
+    assert(!chmod(fn, 0600));
+    assert((fd = open(fn, O_APPEND | O_WRONLY)) >= 0);
+    assert(write(fd, "\n\" ALGORITHM SHA512\n", 20) == 20);
+    close(fd);
+
+    response = "346407";
+    assert(pam_sm_authenticate(NULL, 0, targc, targv) == PAM_SUCCESS);
+    verify_prompts_shown(expected_good_prompts_shown);
+
+    response = "050548";
+    assert(pam_sm_authenticate(NULL, 0, targc, targv) == PAM_AUTH_ERR);
+    verify_prompts_shown(expected_bad_prompts_shown);
+
+    // Reset secret file after algorithm testing.
     assert(!chmod(fn, 0600));
     assert((fd = open(fn, O_TRUNC | O_WRONLY)) >= 0);
     assert(write(fd, secret, sizeof(secret)-1) == sizeof(secret)-1);

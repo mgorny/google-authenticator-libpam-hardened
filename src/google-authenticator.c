@@ -115,7 +115,8 @@ static const char *urlEncode(const char *s) {
 
 static const char *getURL(const char *secret, const char *label,
                           const int use_totp, const char *issuer,
-                          const int period, const int digits) {
+                          const int period, const int digits,
+                          const int algorithm) {
   const char *encodedLabel = urlEncode(label);
   char *url;
   const char totp = use_totp ? 't' : 'h';
@@ -152,6 +153,20 @@ static const char *getURL(const char *secret, const char *label,
     // Append to URL &digits=<digits>
     char *newUrl;
     if (asprintf(&newUrl, "%s&digits=%d", url, digits) < 0) {
+      fprintf(stderr, "String allocation failed, probably running out of memory.\n");
+      _exit(1);
+    }
+    free(url);
+    url = newUrl;
+  }
+
+  if (algorithm != -1) {
+    // Append to URL &algorithm=<algo>
+    char *newUrl;
+    if (asprintf(&newUrl, "%s&algorithm=%s", url,
+                 algorithm == OATH_TOTP_HMAC_SHA256 ? "SHA256" :
+                 algorithm == OATH_TOTP_HMAC_SHA512 ? "SHA512" :
+                 "SHA1") < 0) {
       fprintf(stderr, "String allocation failed, probably running out of memory.\n");
       _exit(1);
     }
@@ -265,12 +280,13 @@ static int displayQRCode(const char* url) {
 // Display to the user what they need to provision their app.
 static void displayEnrollInfo(const char *secret, const char *label,
                               const int use_totp, const char *issuer,
-                              const int period, const int digits) {
+                              const int period, const int digits,
+                              const int algorithm) {
   if (qr_mode == QR_NONE) {
     return;
   }
   const char *url = getURL(secret, label, use_totp, issuer, period,
-                           digits);
+                           digits, algorithm);
 
   // Only newer systems have support for libqrencode. So instead of requiring
   // it at build-time we look for it at run-time. If it cannot be found, the
@@ -355,7 +371,8 @@ static void usage(void) {
  " -w, --window-size=W            Set window of concurrently valid codes\n"
  " -W, --minimal-window           Disable window of concurrently valid codes\n"
  " -e, --emergency-codes=N        Number of emergency codes to generate\n"
- " -g, --digits={6,7,8}           Number of digits to use for auth codes");
+ " -g, --digits={6,7,8}           Number of digits to use for auth codes\n"
+ " -a, --algorithm=sha{1,256,512} Algorithm to use for HMAC");
 }
 
 int main(int argc, char *argv[]) {
@@ -365,6 +382,7 @@ int main(int argc, char *argv[]) {
   static const char disallow[]  = "\" DISALLOW_REUSE\n";
   static const char step[]      = "\" STEP_SIZE 30\n";
   static const char digits[]    = "\" DIGITS 6\n";
+  static const char algorithm[] = "\" ALGORITHM sha512\n";
   static const char window[]    = "\" WINDOW_SIZE 17\n";
   static const char ratelimit[] = "\" RATE_LIMIT 3 30\n";
   char secret[(SECRET_BITS + BITS_PER_BASE32_CHAR-1)/BITS_PER_BASE32_CHAR +
@@ -373,6 +391,7 @@ int main(int argc, char *argv[]) {
               sizeof(disallow) +
               sizeof(step) +
               sizeof(digits) +
+              sizeof(algorithm) +
               sizeof(window) +
               sizeof(ratelimit) + 5 + // NN MMM (total of five digits)
               SCRATCHCODE_LENGTH*(MAX_SCRATCHCODES + 1 /* newline */) +
@@ -389,6 +408,8 @@ int main(int argc, char *argv[]) {
   int window_size = 0;
   int emergency_codes = -1;
   int digits_num = 0;
+  int totp_algo = -1;
+
   int idx;
   for (;;) {
     static const char optstring[] = "+hctdDfl:i:qQ:r:R:us:S:w:We:g:";
@@ -412,6 +433,7 @@ int main(int argc, char *argv[]) {
       { "minimal-window",   0, 0, 'W' },
       { "emergency-codes",  1, 0, 'e' },
       { "digits",           1, 0, 'g' },
+      { "algorithm",        1, 0, 'a' },
       { 0,                  0, 0,  0  }
     };
     idx = -1;
@@ -642,6 +664,22 @@ int main(int argc, char *argv[]) {
         _exit(1);
       }
       digits_num = (int)l;
+    } else if (!idx--) {
+      // algorithm
+      if (totp_algo != -1) {
+        fprintf(stderr, "Duplicate -a option detected\n");
+        _exit(1);
+      }
+      if (!strcasecmp(optarg, "sha1")) {
+        totp_algo = 0;
+      } else if (!strcasecmp(optarg, "sha256")) {
+        totp_algo = OATH_TOTP_HMAC_SHA256;
+      } else if (!strcasecmp(optarg, "sha512")) {
+        totp_algo = OATH_TOTP_HMAC_SHA512;
+      } else {
+        fprintf(stderr, "Invalid algorithm \"%s\"\n", optarg);
+        _exit(1);
+      }
     } else {
       fprintf(stderr, "Error\n");
       _exit(1);
@@ -653,6 +691,10 @@ int main(int argc, char *argv[]) {
   }
   if (reuse != ASK_REUSE && mode != TOTP_MODE) {
     fprintf(stderr, "Must select time-based mode, when using -d or -D\n");
+    _exit(1);
+  }
+  if (totp_algo != -1 && mode != TOTP_MODE) {
+    fprintf(stderr, "Must select time-based mode, when using -a\n");
     _exit(1);
   }
   if ((r_time && !r_limit) || (!r_time && r_limit)) {
@@ -709,9 +751,10 @@ int main(int argc, char *argv[]) {
 
       if (use_totp) {
         time_t tv = now + (i - 1) * (step_size ? step_size : 30);
-        ret = oath_totp_generate(buf, SECRET_BITS/8, tv, step_size, 0,
-                                 digits_num ? digits_num : 6,
-                                 otp_buf[i]);
+        ret = oath_totp_generate2(buf, SECRET_BITS/8, tv, step_size, 0,
+                                  digits_num ? digits_num : 6,
+                                  totp_algo != -1 ? totp_algo : 0,
+                                  otp_buf[i]);
       } else {
         ret = oath_hotp_generate(buf, SECRET_BITS/8, i-1,
                                  digits_num ? digits_num : 6,
@@ -725,7 +768,8 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    displayEnrollInfo(secret, label, use_totp, issuer, step_size, digits_num);
+    displayEnrollInfo(secret, label, use_totp, issuer, step_size,
+                      digits_num, totp_algo);
     printf("Your new secret key is: %s\n", secret);
     printf("Your potential verification codes are %s %s %s %s %s\n",
            otp_buf[0], otp_buf[1], otp_buf[2], otp_buf[3], otp_buf[4]);
@@ -814,6 +858,14 @@ int main(int argc, char *argv[]) {
     if (digits_num) {
       char s[80];
       snprintf(s, sizeof s, "\" DIGITS %d\n", digits_num);
+      addOption(secret, sizeof(secret), s);
+    }
+    if (totp_algo != -1) {
+      char s[80];
+      snprintf(s, sizeof s, "\" ALGORITHM %s\n",
+               totp_algo == OATH_TOTP_HMAC_SHA256 ? "sha256" :
+               totp_algo == OATH_TOTP_HMAC_SHA512 ? "sha512" :
+               "sha1");
       addOption(secret, sizeof(secret), s);
     }
     if (!window_size) {

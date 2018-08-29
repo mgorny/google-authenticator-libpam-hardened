@@ -173,6 +173,13 @@ Supported values are 6, 7 and 8. The default is 6. Not all clients
 support different digit numbers.
 .RE
 .TP
+.B \-a, \-\-algorithm=\f[I]sha1|sha256|sha512\f[]
+Set the algorithm to use for HMAC.
+.RS
+.PP
+Supported values are sha1, sha256 and sha512. The default is sha1.
+.RE
+.TP
 .B \-r, \-\-rate\-limit=\f[I]N\f[], \-R, \-\-rate\-time=\f[I]M\f[], \-u, \-\-no\-rate\-limit
 Disable rate\-limiting, or limit logins to N per every M seconds.
 .RS
