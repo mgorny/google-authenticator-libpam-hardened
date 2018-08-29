@@ -50,39 +50,6 @@
 
 static enum { QR_UNSET=0, QR_NONE, QR_ANSI, QR_UTF8 } qr_mode = QR_UNSET;
 
-static int generateCode(const char *key, unsigned long tm, int digits) {
-  // Estimated number of bytes needed to represent the decoded secret. Because
-  // of white-space and separators, this is an upper bound of the real number,
-  // which we later get as a return-value from base32_decode()
-  int secretLen = (strlen(key) + 7)/8*BITS_PER_BASE32_CHAR;
-
-  // Sanity check, that our secret will fixed into a reasonably-sized static
-  // array.
-  if (secretLen <= 0 || secretLen > 100) {
-    return -1;
-  }
-
-  // Decode secret from Base32 to a binary representation, and check that we
-  // have at least one byte's worth of secret data.
-  uint8_t secret[100];
-  if ((secretLen = base32_decode((const uint8_t *)key, secret, secretLen))<1) {
-    return -1;
-  }
-
-  if (!digits)
-    digits = 6;
-
-  char buf[9];
-  int ret;
-
-  ret = oath_hotp_generate(secret, secretLen, tm, digits, 0, 0, buf);
-  if (ret != OATH_OK) {
-    return -1;
-  }
-
-  return atoi(buf);
-}
-
 // return the user name in heap-allocated buffer.
 // Caller frees.
 static const char *getUserName(uid_t uid) {
@@ -734,9 +701,19 @@ int main(int argc, char *argv[]) {
     use_totp = mode == TOTP_MODE;
   }
   if (!quiet) {
+    char otp_buf[9];
+    int ret = oath_hotp_generate(buf, SECRET_BITS/8, 0,
+                                 digits_num ? digits_num : 6,
+                                 0, 0, otp_buf);
+    if (ret != OATH_OK) {
+      fprintf(stderr, "Error generating verification code: %s\n",
+              oath_strerror(ret));
+      return 1;
+    }
+
     displayEnrollInfo(secret, label, use_totp, issuer, step_size, digits_num);
     printf("Your new secret key is: %s\n", secret);
-    printf("Your verification code is %06d\n", generateCode(secret, 0, digits_num));
+    printf("Your verification code is %s\n", otp_buf);
     printf("Your emergency scratch codes are:\n");
   }
   free(label);
