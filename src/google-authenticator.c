@@ -701,19 +701,23 @@ int main(int argc, char *argv[]) {
     use_totp = mode == TOTP_MODE;
   }
   if (!quiet) {
-    char otp_buf[9];
-    int ret = oath_hotp_generate(buf, SECRET_BITS/8, 0,
-                                 digits_num ? digits_num : 6,
-                                 0, 0, otp_buf);
-    if (ret != OATH_OK) {
-      fprintf(stderr, "Error generating verification code: %s\n",
-              oath_strerror(ret));
-      return 1;
+    char otp_buf[5][9];
+    int64_t i;
+    for (i = 0; i < 5; ++i) {
+      int ret = oath_hotp_generate(buf, SECRET_BITS/8, i-1,
+                                   digits_num ? digits_num : 6,
+                                   0, 0, otp_buf[i]);
+      if (ret != OATH_OK) {
+        fprintf(stderr, "Error generating verification code: %s\n",
+                oath_strerror(ret));
+        return 1;
+      }
     }
 
     displayEnrollInfo(secret, label, use_totp, issuer, step_size, digits_num);
     printf("Your new secret key is: %s\n", secret);
-    printf("Your verification code is %s\n", otp_buf);
+    printf("Your potential verification codes are %s %s %s %s %s\n",
+           otp_buf[0], otp_buf[1], otp_buf[2], otp_buf[3], otp_buf[4]);
     printf("Your emergency scratch codes are:\n");
   }
   free(label);
