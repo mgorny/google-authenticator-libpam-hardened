@@ -1466,6 +1466,9 @@ static int check_timebased_code(pam_handle_t *pamh, const char*secret_filename,
   free((void *)skew_str);
 
   const int digit_num = digits(pamh, secret_filename, *buf);
+  if (!digit_num) {
+    return -1;
+  }
 
   const int window = window_size(pamh, secret_filename, *buf);
   if (!window) {
@@ -1550,6 +1553,9 @@ static int check_counterbased_code(pam_handle_t *pamh,
   }
 
   const int digit_num = digits(pamh, secret_filename, *buf);
+  if (!digit_num) {
+    return -1;
+  }
 
   // Compute [window_size] verification codes and compare them with user input.
   // Future codes are allowed in case the user computed but did not use a code.
