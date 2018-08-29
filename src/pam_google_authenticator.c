@@ -1471,16 +1471,19 @@ static int check_timebased_code(pam_handle_t *pamh, const char*secret_filename,
   if (!window) {
     return -1;
   }
+
+  char otp_buf[9];
+
   for (int i = -((window-1)/2); i <= window/2; ++i) {
-    time_t tmval = (tm + skew + i*step) / step;
-    const int hash = compute_code(secret, secretLen, tmval,
-                                  digit_num);
-    if (hash == -1) {
-      log_message(LOG_ERR, pamh, "OTP generation failed");
-      return -1;
+    time_t tmval = tm + skew + i*step;
+    int ret = oath_totp_generate(secret, secretLen, tmval, step, 0,
+                                 digit_num, otp_buf);
+    if (ret != OATH_OK) {
+      log_message(LOG_ERR, pamh, "OTP generation failed: %s",
+                  oath_strerror(ret));
     }
-    if (hash == (unsigned int)code) {
-      return invalidate_timebased_code(tmval, pamh, secret_filename,
+    if (atoi(otp_buf) == code) {
+      return invalidate_timebased_code(tmval/step, pamh, secret_filename,
                                        updated, buf);
     }
   }
@@ -1491,22 +1494,25 @@ static int check_timebased_code(pam_handle_t *pamh, const char*secret_filename,
     // use.
     skew = 1000000;
     for (int i = 0; i < 25*60; ++i) {
-      int hash = compute_code(secret, secretLen, (tm - i*step)/step, digit_num);
-      if (hash == -1) {
-        log_message(LOG_ERR, pamh, "OTP generation failed");
-        return -1;
+      time_t tmval = tm - i*step;
+      int ret = oath_totp_generate(secret, secretLen, tm - i*step, step,
+                                   0, digit_num, otp_buf);
+      if (ret != OATH_OK) {
+        log_message(LOG_ERR, pamh, "OTP generation failed: %s",
+                    oath_strerror(ret));
       }
-      if (hash == (unsigned int)code && skew == 1000000) {
+      if (atoi(otp_buf) == (unsigned int)code && skew == 1000000) {
         // Don't short-circuit out of the loop as the obvious difference in
         // computation time could be a signal that is valuable to an attacker.
         skew = -i;
       }
-      hash = compute_code(secret, secretLen, (tm + i*step)/step, digit_num);
-      if (hash == -1) {
-        log_message(LOG_ERR, pamh, "OTP generation failed");
-        return -1;
+      ret = oath_totp_generate(secret, secretLen, tm + i*step, step, 0,
+                               digit_num, otp_buf);
+      if (ret != OATH_OK) {
+        log_message(LOG_ERR, pamh, "OTP generation failed: %s",
+                    oath_strerror(ret));
       }
-      if (hash == (unsigned int)code && skew == 1000000) {
+      if (atoi(otp_buf) == (unsigned int)code && skew == 1000000) {
         skew = i;
       }
     }
