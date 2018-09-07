@@ -1,6 +1,12 @@
 # Google Authenticator PAM module (hardened by Michał Górny)
 
-Example PAM module demonstrating two-factor authentication.
+This is a fork of [google-authenticator PAM module][1] aimed at providing
+a secure and complete implementation of HOTP and TOTP, rather than the minimal
+necessary to support Google's mobile app. For complete list of changes, please
+read [README.fork.md][2].
+
+[1]: https://github.com/google/google-authenticator-libpam
+[2]: README.fork.md
 
 ## Build & install
 ```shell
