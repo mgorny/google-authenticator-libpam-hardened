@@ -419,7 +419,7 @@ int main(int argc, char *argv[]) {
 
   int idx;
   for (;;) {
-    static const char optstring[] = "+hctdDfl:i:qQ:r:R:us:S:w:We:g:";
+    static const char optstring[] = "+hctdDfl:i:qQ:r:R:us:S:w:We:g:a:";
     static struct option options[] = {
       { "help",             0, 0, 'h' },
       { "counter-based",    0, 0, 'c' },
