@@ -69,7 +69,9 @@ LIBS="${LIBS} ${OATH_LIBS}"
 AC_CHECK_FUNCS([oath_totp_generate2])
 LIBS=${save_LIBS}
 
-AC_ARG_ENABLE([qrencode], [Enable displaying QRCodes via libqrencode],
+AC_ARG_ENABLE([qrencode],
+	[AS_HELP_STRING([--disable-qrencode],
+		[Disable use of libqrencode to display QRcodes])],
 	[], [enable_qrencode=auto])
 if test "${enable_qrencode}" != "no"; then
 	PKG_CHECK_MODULES([QRENCODE], [libqrencode], [
